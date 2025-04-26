@@ -1,26 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Мой сайт</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добро пожаловать!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+    </style>
     <script>
-        // Отправка данных при загрузке страницы
-        window.onload = function() {
-            fetch('https://formsubmit.co/ajax/adelkhakim16@gmail.com', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    ip: "{{ip}}",
-                    userAgent: navigator.userAgent,
-                    page: "Посещение сайта"
+        // Функция для сбора данных о посетителе
+        function collectVisitorData() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                pageUrl: window.location.href,
+                userAgent: navigator.userAgent,
+                screenWidth: window.screen.width,
+                screenHeight: window.screen.height,
+                language: navigator.language,
+                referrer: document.referrer || 'Прямой переход'
+            };
+
+            // Получаем IP через сторонний сервис
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(ipData => {
+                    data.ip = ipData.ip;
+                    
+                    // Отправляем все данные на Webhook.site
+                    fetch('https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => console.log('Данные отправлены', data))
+                    .catch(error => console.error('Ошибка:', error));
                 })
-            });
-        };
+                .catch(error => {
+                    console.error('Не удалось получить IP:', error);
+                    data.ip = 'Неизвестен';
+                    
+                    // Отправляем данные без IP
+                    fetch('https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+                });
+        }
+
+        // Запускаем при полной загрузке страницы
+        window.addEventListener('load', collectVisitorData);
     </script>
 </head>
 <body>
-    <h1>Добро пожаловать!</h1>
-    <p>Это тестовый сайт.</p>
+    <h1>Добро пожаловать на наш сайт!</h1>
+    <p>Спасибо за ваш визит.</p>
+    <p>Если вы видите это сообщение, значит всё работает правильно.</p>
 </body>
 </html>
