@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Мой сайт</title>
+    <script>
+        // Отправка данных при загрузке страницы
+        window.onload = function() {
+            fetch('https://formsubmit.co/ajax/adelkhakim16@gmail.com', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ip: "{{ip}}",
+                    userAgent: navigator.userAgent,
+                    page: "Посещение сайта"
+                })
+            });
+        };
+    </script>
+</head>
+<body>
+    <h1>Добро пожаловать!</h1>
+    <p>Это тестовый сайт.</p>
+</body>
+</html>
