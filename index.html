@@ -1,142 +1,114 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Добро пожаловать!</title>
-    <script>
-        // Основной объект для сбора данных
-        const collectData = async () => {
-            const data = {
-                // Базовые данные
-                ip: "waiting...",
-                url: window.location.href,
-                userAgent: navigator.userAgent,
-                time: new Date().toISOString(),
-                
-                // Дополнительные данные
-                screenResolution: `${window.screen.width}x${window.screen.height}`,
-                colorDepth: window.screen.colorDepth,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                language: navigator.language,
-                cookiesEnabled: navigator.cookieEnabled,
-                doNotTrack: navigator.doNotTrack,
-                hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
-                deviceMemory: navigator.deviceMemory || 'unknown',
-                
-                // Поведенческие данные (начинаем собирать)
-                mouseMovements: [],
-                scrollDepth: 0,
-                timeOnPage: 0,
-                
-                // Попытка определения ОС
-                platform: navigator.platform,
-                
-                // Попытка определения типа устройства
-                touchSupport: 'ontouchstart' in window || navigator.maxTouchPoints > 0
-            };
-
-            // Получаем IP
-            try {
-                const ipResponse = await fetch('https://api.ipify.org?format=json');
-                const ipData = await ipResponse.json();
-                data.ip = ipData.ip;
-                
-                // Дополнительная информация по IP
-                try {
-                    const geoResponse = await fetch(`https://ipapi.co/${data.ip}/json/`);
-                    const geoData = await geoResponse.json();
-                    data.geoInfo = {
-                        country: geoData.country_name,
-                        region: geoData.region,
-                        city: geoData.city,
-                        isp: geoData.org
-                    };
-                } catch (geoError) {
-                    console.log("Геоданные недоступны");
-                }
-            } catch (ipError) {
-                console.log("IP не получен");
-            }
-
-            // Таймер времени на странице
-            const timeInterval = setInterval(() => {
-                data.timeOnPage += 1;
-            }, 1000);
-
-            // Отслеживание движений мыши
-            document.addEventListener('mousemove', (e) => {
-                data.mouseMovements.push({
-                    x: e.clientX,
-                    y: e.clientY,
-                    t: Date.now()
-                });
-                
-                // Ограничиваем количество записей
-                if (data.mouseMovements.length > 100) {
-                    data.mouseMovements.shift();
-                }
-            });
-
-            // Отслеживание прокрутки
-            window.addEventListener('scroll', () => {
-                const scrollPercent = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
-                data.scrollDepth = Math.max(data.scrollDepth, scrollPercent);
-            });
-
-            // Перед отправкой очищаем интервалы
-            window.addEventListener('beforeunload', () => {
-                clearInterval(timeInterval);
-                sendData(data);
-            });
-        };
-
-        // Функция отправки данных
-        const sendData = (data) => {
-            // Используем navigator.sendBeacon если доступно
-            if (navigator.sendBeacon) {
-                const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-                navigator.sendBeacon('https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85', blob);
-            } else {
-                // Fallback через Image
-                const trackerImg = new Image();
-                trackerImg.src = `https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85?data=${encodeURIComponent(JSON.stringify(data))}`;
-            }
-        };
-
-        // Запускаем сбор данных после загрузки страницы
-        window.addEventListener('DOMContentLoaded', collectData);
-    </script>
+    <title>Аналитика посещений</title>
+    <style>
+        #debug-output {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
-    <h1>Добро пожаловать на наш сайт!</h1>
-    <p>Спасибо за ваш визит.</p> 
-    <p>Если вы видите это сообщение, значит всё работает правильно.</p>
+    <h1>Добро пожаловать!</h1>
+    <p>Идёт сбор основных данных...</p>
     
-    <!-- Уведомление о сборе данных -->
-    <div id="cookie-consent" style="position: fixed; bottom: 0; background: #f1f1f1; padding: 10px; width: 100%;">
-        <p>Мы используем cookies и собираем анонимные данные для улучшения нашего сервиса. 
-           <button id="accept-btn">Принять</button>
-           <button id="decline-btn">Отклонить</button>
-        </p>
-    </div>
+    <div id="debug-output"></div>
 
     <script>
-        // Обработчик согласия
-        document.getElementById('accept-btn').addEventListener('click', () => {
-            localStorage.setItem('dataCollectionConsent', 'true');
-            document.getElementById('cookie-consent').style.display = 'none';
-        });
+        // Элемент для отладки
+        const debugEl = document.getElementById('debug-output');
         
-        document.getElementById('decline-btn').addEventListener('click', () => {
-            localStorage.setItem('dataCollectionConsent', 'false');
-            document.getElementById('cookie-consent').style.display = 'none';
-            // Остановить сбор данных
-            window.removeEventListener('beforeunload', sendData);
-        });
-        
-        // Проверяем предыдущее согласие
-        if (localStorage.getItem('dataCollectionConsent') === 'true') {
-            document.getElementById('cookie-consent').style.display = 'none';
+        // Логирование в консоль и на страницу
+        function debugLog(message) {
+            console.log('[DEBUG]', message);
+            debugEl.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
         }
+
+        // Получение IP через CORS-совместимый сервис
+        async function getIP() {
+            try {
+                debugLog("Получаем IP адрес...");
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip;
+            } catch (error) {
+                debugLog("Ошибка получения IP: " + error.message);
+                return "unknown";
+            }
+        }
+
+        // Получение геоданных через прокси-сервис
+        async function getGeoData(ip) {
+            if (ip === "unknown") return null;
+            
+            try {
+                debugLog("Запрашиваем геоданные...");
+                const response = await fetch(`https://ipapi.co/${ip}/json/`);
+                if (!response.ok) throw new Error("API не отвечает");
+                return await response.json();
+            } catch (error) {
+                debugLog("Ошибка геоданных: " + error.message);
+                return null;
+            }
+        }
+
+        // Отправка данных на webhook
+        async function sendToWebhook(data) {
+            const webhookUrl = 'https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85';
+            
+            try {
+                debugLog("Отправляем данные...");
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                debugLog(`Данные отправлены (статус: ${response.status})`);
+            } catch (error) {
+                debugLog("Ошибка отправки: " + error.message);
+            }
+        }
+
+        // Основная функция
+        async function collectData() {
+            const ip = await getIP();
+            const geoData = await getGeoData(ip);
+            
+            const collectedData = {
+                meta: {
+                    timestamp: new Date().toISOString(),
+                    url: window.location.href
+                },
+                device: {
+                    ip: ip,
+                    userAgent: navigator.userAgent,
+                    screen: `${window.screen.width}x${window.screen.height}`,
+                    language: navigator.language,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    cookies: navigator.cookieEnabled ? "enabled" : "disabled"
+                },
+                location: geoData ? {
+                    country: geoData.country_name,
+                    region: geoData.region,
+                    city: geoData.city,
+                    isp: geoData.org
+                } : null
+            };
+
+            debugLog("Собранные данные: " + JSON.stringify(collectedData, null, 2));
+            await sendToWebhook(collectedData);
+        }
+
+        // Запускаем при загрузке страницы
+        window.addEventListener('DOMContentLoaded', collectData);
     </script>
 </body>
 </html>
