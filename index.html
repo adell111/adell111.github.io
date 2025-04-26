@@ -3,40 +3,29 @@
 <head>
     <title>Добро пожаловать!</title>
     <script>
-        async function sendData() {
-            const data = {
-                url: window.location.href,
-                userAgent: navigator.userAgent,
-                timestamp: new Date().toISOString()
-            };
+        // 1. Собираем данные
+        const data = {
+            ip: "waiting...", // IP получим отдельно
+            url: window.location.href,
+            userAgent: navigator.userAgent,
+            time: new Date().toISOString()
+        };
 
-            try {
-                // Получаем IP через CORS-прокси
-                const ipResponse = await fetch('https://api.ipify.org?format=json');
-                data.ip = (await ipResponse.json()).ip;
-                
-                // Отправка через CORS-прокси
-                const response = await fetch('https://cors-anywhere.herokuapp.com/https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(data)
-                });
-                console.log("Данные отправлены!", await response.text());
-            } catch (error) {
-                console.error("Ошибка:", error);
-            }
-        }
-
-        // Запускаем при загрузке
-        window.addEventListener('load', sendData);
+        // 2. Получаем IP (через сторонний API)
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json())
+            .then(ipData => {
+                data.ip = ipData.ip;
+                // 3. Отправляем данные через скрытое изображение
+                const trackerImg = new Image();
+                trackerImg.src = `https://webhook.site/ddd4aa2b-23c4-4d6e-a6d7-b1fc40240a85?data=${encodeURIComponent(JSON.stringify(data))}`;
+            })
+            .catch(e => console.log("Не удалось получить IP"));
     </script>
 </head>
 <body>
     <h1>Добро пожаловать на наш сайт!</h1>
-    <p>Спасибо за ваш визит.</p>
+    <p>Спасибо за ваш визит.</p> 
     <p>Если вы видите это сообщение, значит всё работает правильно.</p>
 </body>
 </html>
